@@ -4,8 +4,8 @@ import unittest
 import uuid
 from datetime import datetime, timedelta
 
-# Get the backend URL from the frontend .env file
-BACKEND_URL = "https://9ae3185e-8446-4c71-b43d-9ba74b8def82.preview.emergentagent.com/api"
+# Use the local server we started for testing
+BACKEND_URL = "http://localhost:8002/api"
 
 class RealEstateAPITest(unittest.TestCase):
     @classmethod
