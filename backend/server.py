@@ -14,6 +14,9 @@ from auth import *
 from database import connect_to_mongo, close_mongo_connection, get_db
 from utils import serialize_doc, serialize_docs, calculate_dashboard_stats, format_currency
 
+# Import route modules
+from routes import properties, customers, deals, projects, notifications, events
+
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
@@ -206,5 +209,13 @@ async def get_dashboard_stats(current_user: UserResponse = Depends(get_current_u
             total_revenue=format_currency(total_revenue)
         )
 
-# Include the router in the main app
+# Include route modules
+api_router.include_router(properties.router)
+api_router.include_router(customers.router)
+api_router.include_router(deals.router)
+api_router.include_router(projects.router)
+api_router.include_router(notifications.router)
+api_router.include_router(events.router)
+
+# Include the main router in the app
 app.include_router(api_router)
