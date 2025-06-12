@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
@@ -12,18 +12,20 @@ import {
   Eye, Edit, Trash2, Star, Calendar, Phone, Mail,
   Home, TrendingUp, Clock, CheckCircle
 } from 'lucide-react';
-import { mockProperties } from '../../mockData/mockData';
 import { useToast } from '../../hooks/use-toast';
+import { propertiesAPI } from '../../services/api';
 
 const PropertyManager = () => {
-  const [properties, setProperties] = useState(mockProperties);
-  const [filteredProperties, setFilteredProperties] = useState(mockProperties);
+  const [properties, setProperties] = useState([]);
+  const [filteredProperties, setFilteredProperties] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterArea, setFilterArea] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [editingProperty, setEditingProperty] = useState(null);
+  const [areas, setAreas] = useState([]);
+  const [types, setTypes] = useState([]);
   const { toast } = useToast();
 
   const [newProperty, setNewProperty] = useState({
@@ -36,17 +38,23 @@ const PropertyManager = () => {
     address: '',
     bedrooms: '',
     bathrooms: '',
-    isHot: false,
-    hasGarden: false,
-    isCorner: false,
-    vastuCompliant: false,
+    is_hot: false,
+    has_garden: false,
+    is_corner: false,
+    vastu_compliant: false,
     owner: { name: '', phone: '', email: '' },
     area: '',
-    brokerageAmount: ''
+    brokerage_amount: ''
   });
 
+  useEffect(() => {
+    loadProperties();
+    loadAreas();
+    loadTypes();
+  }, []);
+
   // Filter properties based on search and filters
-  React.useEffect(() => {
+  useEffect(() => {
     let filtered = properties;
 
     if (searchTerm) {
@@ -72,50 +80,120 @@ const PropertyManager = () => {
     setFilteredProperties(filtered);
   }, [properties, searchTerm, filterArea, filterStatus, filterType]);
 
-  const handleAddProperty = () => {
-    const property = {
-      ...newProperty,
-      id: Date.now(),
-      images: ["https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?w=400"],
-      interestedCustomers: [],
-      nextFollowUp: new Date().toISOString().split('T')[0],
-      dealStatus: 'Interested'
-    };
-
-    setProperties([property, ...properties]);
-    setNewProperty({
-      title: '', type: '', status: 'For Sale', price: '', size: '', facing: '',
-      address: '', bedrooms: '', bathrooms: '', isHot: false, hasGarden: false,
-      isCorner: false, vastuCompliant: false, owner: { name: '', phone: '', email: '' },
-      area: '', brokerageAmount: ''
-    });
-    setIsAddDialogOpen(false);
-    toast({
-      title: "Property Added",
-      description: "New property has been added successfully",
-    });
+  const loadProperties = async () => {
+    try {
+      setLoading(true);
+      const response = await propertiesAPI.getAll();
+      setProperties(response.data);
+    } catch (error) {
+      console.error('Error loading properties:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load properties",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeleteProperty = (id) => {
-    setProperties(properties.filter(p => p.id !== id));
-    toast({
-      title: "Property Deleted",
-      description: "Property has been removed from your listings",
-    });
+  const loadAreas = async () => {
+    try {
+      const response = await propertiesAPI.getAreas();
+      setAreas(response.data.areas || []);
+    } catch (error) {
+      console.error('Error loading areas:', error);
+    }
   };
 
-  const toggleHotProperty = (id) => {
-    setProperties(properties.map(p => 
-      p.id === id ? { ...p, isHot: !p.isHot } : p
-    ));
-    toast({
-      title: "Property Updated",
-      description: "Hot property status updated",
-    });
+  const loadTypes = async () => {
+    try {
+      const response = await propertiesAPI.getTypes();
+      setTypes(response.data.types || []);
+    } catch (error) {
+      console.error('Error loading types:', error);
+    }
   };
 
-  const areas = [...new Set(properties.map(p => p.area))];
-  const propertyTypes = [...new Set(properties.map(p => p.type))];
+  const handleAddProperty = async () => {
+    try {
+      const propertyData = {
+        ...newProperty,
+        bedrooms: parseInt(newProperty.bedrooms) || 0,
+        bathrooms: parseInt(newProperty.bathrooms) || 0
+      };
+
+      const response = await propertiesAPI.create(propertyData);
+      setProperties([response.data, ...properties]);
+      setNewProperty({
+        title: '', type: '', status: 'For Sale', price: '', size: '', facing: '',
+        address: '', bedrooms: '', bathrooms: '', is_hot: false, has_garden: false,
+        is_corner: false, vastu_compliant: false, owner: { name: '', phone: '', email: '' },
+        area: '', brokerage_amount: ''
+      });
+      setIsAddDialogOpen(false);
+      toast({
+        title: "Property Added",
+        description: "New property has been added successfully",
+      });
+    } catch (error) {
+      console.error('Error adding property:', error);
+      toast({
+        title: "Error",
+        description: error.response?.data?.detail || "Failed to add property",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleDeleteProperty = async (id) => {
+    try {
+      await propertiesAPI.delete(id);
+      setProperties(properties.filter(p => p.id !== id));
+      toast({
+        title: "Property Deleted",
+        description: "Property has been removed from your listings",
+      });
+    } catch (error) {
+      console.error('Error deleting property:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete property",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const toggleHotProperty = async (id) => {
+    try {
+      const response = await propertiesAPI.toggleHot(id);
+      setProperties(properties.map(p => 
+        p.id === id ? response.data : p
+      ));
+      toast({
+        title: "Property Updated",
+        description: "Hot property status updated",
+      });
+    } catch (error) {
+      console.error('Error updating property:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update property",
+        variant: "destructive"
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading properties...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -244,11 +322,11 @@ const PropertyManager = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="brokerageAmount">Brokerage Amount</Label>
+                <Label htmlFor="brokerage_amount">Brokerage Amount</Label>
                 <Input
-                  id="brokerageAmount"
-                  value={newProperty.brokerageAmount}
-                  onChange={(e) => setNewProperty({...newProperty, brokerageAmount: e.target.value})}
+                  id="brokerage_amount"
+                  value={newProperty.brokerage_amount}
+                  onChange={(e) => setNewProperty({...newProperty, brokerage_amount: e.target.value})}
                   placeholder="e.g., ₹2.5 Lakh"
                 />
               </div>
@@ -332,7 +410,7 @@ const PropertyManager = () => {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                {propertyTypes.map(type => (
+                {types.map(type => (
                   <SelectItem key={type} value={type}>{type}</SelectItem>
                 ))}
               </SelectContent>
@@ -346,16 +424,14 @@ const PropertyManager = () => {
         {filteredProperties.map((property) => (
           <Card key={property.id} className="overflow-hidden hover:shadow-lg transition-shadow">
             <div className="relative">
-              <img 
-                src={property.images[0]} 
-                alt={property.title}
-                className="w-full h-48 object-cover"
-              />
+              <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
+                <Home className="h-16 w-16 text-gray-400" />
+              </div>
               <div className="absolute top-2 left-2 flex gap-2">
                 <Badge variant={property.status === 'For Sale' ? 'default' : 'secondary'}>
                   {property.status}
                 </Badge>
-                {property.isHot && <Badge variant="destructive">🔥 Hot</Badge>}
+                {property.is_hot && <Badge variant="destructive">🔥 Hot</Badge>}
               </div>
               <Button
                 size="sm"
@@ -363,7 +439,7 @@ const PropertyManager = () => {
                 className="absolute top-2 right-2 bg-white/80 hover:bg-white"
                 onClick={() => toggleHotProperty(property.id)}
               >
-                <Star className={`h-4 w-4 ${property.isHot ? 'fill-yellow-500 text-yellow-500' : ''}`} />
+                <Star className={`h-4 w-4 ${property.is_hot ? 'fill-yellow-500 text-yellow-500' : ''}`} />
               </Button>
             </div>
             
@@ -400,9 +476,9 @@ const PropertyManager = () => {
                 </div>
                 
                 <div className="flex flex-wrap gap-1 mt-2">
-                  {property.hasGarden && <Badge variant="outline" className="text-xs">Garden</Badge>}
-                  {property.isCorner && <Badge variant="outline" className="text-xs">Corner</Badge>}
-                  {property.vastuCompliant && <Badge variant="outline" className="text-xs">Vastu</Badge>}
+                  {property.has_garden && <Badge variant="outline" className="text-xs">Garden</Badge>}
+                  {property.is_corner && <Badge variant="outline" className="text-xs">Corner</Badge>}
+                  {property.vastu_compliant && <Badge variant="outline" className="text-xs">Vastu</Badge>}
                   <Badge variant="outline" className="text-xs">{property.facing} Facing</Badge>
                 </div>
                 
@@ -412,20 +488,12 @@ const PropertyManager = () => {
                     <span className="font-medium">{property.owner.name}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Interested:</span>
-                    <span className="font-medium">{property.interestedCustomers.length} customers</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Next Follow-up:</span>
-                    <span className="font-medium">{property.nextFollowUp}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
                     <span className="text-gray-600">Deal Status:</span>
                     <Badge variant={
-                      property.dealStatus === 'Finalized' ? 'default' :
-                      property.dealStatus === 'Cancelled' ? 'destructive' : 'secondary'
+                      property.deal_status === 'Finalized' ? 'default' :
+                      property.deal_status === 'Cancelled' ? 'destructive' : 'secondary'
                     }>
-                      {property.dealStatus}
+                      {property.deal_status}
                     </Badge>
                   </div>
                 </div>
@@ -459,7 +527,14 @@ const PropertyManager = () => {
           <CardContent className="text-center py-12">
             <Home className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-600">No properties found</h3>
-            <p className="text-gray-500 mt-2">Try adjusting your search or filters</p>
+            <p className="text-gray-500 mt-2">Try adjusting your search or filters, or add a new property</p>
+            <Button 
+              className="mt-4" 
+              onClick={() => setIsAddDialogOpen(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Your First Property
+            </Button>
           </CardContent>
         </Card>
       )}
