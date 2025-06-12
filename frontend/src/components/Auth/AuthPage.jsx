@@ -7,16 +7,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Badge } from '../ui/badge';
 import { Building2, UserCheck, Eye, EyeOff } from 'lucide-react';
 import { useToast } from '../../hooks/use-toast';
+import { authAPI } from '../../services/api';
 
 const AuthPage = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
-    confirmPassword: '',
+    confirm_password: '',
     role: '',
-    fullName: '',
+    full_name: '',
     phone: ''
   });
   const navigate = useNavigate();
@@ -29,42 +31,36 @@ const AuthPage = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setLoading(true);
     
-    if (isLogin) {
-      // Mock login validation
-      if (formData.email && formData.password) {
-        // Store user data in localStorage (mock authentication)
-        const userData = {
+    try {
+      if (isLogin) {
+        // Login
+        const response = await authAPI.login({
           email: formData.email,
-          role: formData.email.includes('broker') ? 'broker' : 'builder',
-          fullName: formData.email.includes('broker') ? 'John Broker' : 'Jane Builder'
-        };
-        localStorage.setItem('user', JSON.stringify(userData));
+          password: formData.password
+        });
+        
+        // Store token and user data
+        localStorage.setItem('token', response.data.access_token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
         
         toast({
           title: "Login Successful",
-          description: `Welcome back, ${userData.fullName}!`,
+          description: `Welcome back, ${response.data.user.full_name}!`,
         });
         
         // Redirect based on role
-        if (userData.role === 'broker') {
+        if (response.data.user.role === 'broker') {
           navigate('/broker-dashboard');
         } else {
           navigate('/builder-dashboard');
         }
       } else {
-        toast({
-          title: "Login Failed",
-          description: "Please enter valid credentials",
-          variant: "destructive"
-        });
-      }
-    } else {
-      // Mock signup validation
-      if (formData.email && formData.password && formData.confirmPassword && formData.role && formData.fullName) {
-        if (formData.password !== formData.confirmPassword) {
+        // Signup
+        if (formData.password !== formData.confirm_password) {
           toast({
             title: "Signup Failed",
             description: "Passwords do not match",
@@ -73,32 +69,49 @@ const AuthPage = () => {
           return;
         }
         
-        const userData = {
+        if (!formData.role || !formData.full_name) {
+          toast({
+            title: "Signup Failed",
+            description: "Please fill all required fields",
+            variant: "destructive"
+          });
+          return;
+        }
+        
+        const response = await authAPI.signup({
           email: formData.email,
-          role: formData.role,
-          fullName: formData.fullName,
-          phone: formData.phone
-        };
-        localStorage.setItem('user', JSON.stringify(userData));
+          password: formData.password,
+          confirm_password: formData.confirm_password,
+          full_name: formData.full_name,
+          phone: formData.phone,
+          role: formData.role
+        });
+        
+        // Store token and user data
+        localStorage.setItem('token', response.data.access_token);
+        localStorage.setItem('user', JSON.stringify(response.data.user));
         
         toast({
           title: "Signup Successful",
-          description: `Welcome, ${userData.fullName}!`,
+          description: `Welcome, ${response.data.user.full_name}!`,
         });
         
         // Redirect based on role
-        if (userData.role === 'broker') {
+        if (response.data.user.role === 'broker') {
           navigate('/broker-dashboard');
         } else {
           navigate('/builder-dashboard');
         }
-      } else {
-        toast({
-          title: "Signup Failed",
-          description: "Please fill all required fields",
-          variant: "destructive"
-        });
       }
+    } catch (error) {
+      console.error('Auth error:', error);
+      toast({
+        title: isLogin ? "Login Failed" : "Signup Failed",
+        description: error.response?.data?.detail || "An error occurred",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -174,13 +187,13 @@ const AuthPage = () => {
               {!isLogin && (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="fullName">Full Name</Label>
+                    <Label htmlFor="full_name">Full Name</Label>
                     <Input
-                      id="fullName"
-                      name="fullName"
+                      id="full_name"
+                      name="full_name"
                       type="text"
                       placeholder="Enter your full name"
-                      value={formData.fullName}
+                      value={formData.full_name}
                       onChange={handleInputChange}
                       className="transition-all duration-200 focus:ring-2 focus:ring-blue-500"
                       required={!isLogin}
@@ -241,13 +254,13 @@ const AuthPage = () => {
               {!isLogin && (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <Label htmlFor="confirm_password">Confirm Password</Label>
                     <Input
-                      id="confirmPassword"
-                      name="confirmPassword"
+                      id="confirm_password"
+                      name="confirm_password"
                       type="password"
                       placeholder="Confirm your password"
-                      value={formData.confirmPassword}
+                      value={formData.confirm_password}
                       onChange={handleInputChange}
                       className="transition-all duration-200 focus:ring-2 focus:ring-blue-500"
                       required={!isLogin}
@@ -301,8 +314,9 @@ const AuthPage = () => {
                 type="submit" 
                 className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 transform hover:scale-105"
                 size="lg"
+                disabled={loading}
               >
-                {isLogin ? 'Sign In' : 'Create Account'}
+                {loading ? 'Loading...' : (isLogin ? 'Sign In' : 'Create Account')}
               </Button>
             </form>
 
